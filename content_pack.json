@@ -1,0 +1,574 @@
+{
+    "v": 1,
+    "id": "a03b44d5-0fbf-49cb-8568-75a2adab03a9",
+    "rev": 1,
+    "name": "Netfilter Log Parser",
+    "summary": "Grok Patterns and Pipeline to Process Netfilter Logs",
+    "description": "",
+    "vendor": "Chateau-Lav",
+    "url": "https://github.com/Chateau-Lav/netfilter",
+    "parameters": [],
+    "entities": [{
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "1ab3784d-07fc-4ecb-8bf3-4334207b4b67",
+            "data": {
+                "name": "NETFILTERHEADER",
+                "pattern": "%{WORD:programname}: (.*%{WORD:action}]|%{WORD:action}).* (IN=%{WORD:in_interface}|OUT=%{WORD:out_interface})(.*MAC=%{NETFILTERMAC}.*SRC=%{IP:src_ip}.*DST=%{IP:dst_ip}|.*SRC=%{IP:src_ip}.*DST=%{IP:dst_ip})"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "6e422426-a55b-4d4f-a212-27042e31d232",
+            "data": {
+                "name": "NETFILTERMAC",
+                "pattern": "%{MAC:dest_mac}:%{MAC:src_mac}:%{ETHTYPE:ethtype}"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "65eaaa11-cb3e-4484-9f59-2dd206052f2a",
+            "data": {
+                "name": "NETFILTERIPHEADER",
+                "pattern": "DST=%{IP} %{GREEDYDATA:message}.*SPT=%{INT}"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "pipeline_rule",
+                "version": "1"
+            },
+            "id": "c23b20a6-a56c-4f24-9ef1-4ecc5fcd6a05",
+            "data": {
+                "title": {
+                    "@type": "string",
+                    "@value": "process netfilter logs"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "source": {
+                    "@type": "string",
+                    "@value": "rule \"process netfilter logs\"\nwhen\n    contains(to_string($message.message), \"kernel\")\nthen\n    let message_field = to_string($message.message); \n    let action1 = grok(pattern: \"%{NETFILTERHEADER}\", value: message_field, only_named_captures: true);\n    set_fields(action1);\n    let action2 = grok(pattern: \"%{NETFILTERIPHEADER}\", value: message_field, only_named_captures: true);\n    let action3 = key_value(to_string(action2));\n    set_fields(action3,\"IP_HEADER_\");\n    set_field(\"pipeline\", \"netfilter ip header parse\");\nend"
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "pipeline_rule",
+                "version": "1"
+            },
+            "id": "5da9fb7c-2dee-409b-9bbc-bc713221c1fc",
+            "data": {
+                "title": {
+                    "@type": "string",
+                    "@value": "process TCP netfilter logs"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "source": {
+                    "@type": "string",
+                    "@value": "rule \"process TCP netfilter logs\"\nwhen\n    contains(to_string($message.IP_HEADER_PROTO), \"TCP\")\nthen\n    let message_field = to_string($message.message); \n    let action = grok(pattern: \"%{NETFILTERTCPHEADER}\", value: message_field, only_named_captures: true);\n    let action1 = key_value(to_string(action));\n    set_fields(action1,\"TCP_HEADER_\");\n    let field_replace = regex_replace(\"}\", to_string($message.TCP_HEADER_URGP), \"\");\n    set_field(\"TCP_HEADER_URGP\", field_replace);\n    set_field(\"pipeline\", \"netfilter TCP header parse\");\nend"
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "lookup_cache",
+                "version": "1"
+            },
+            "id": "e8b5446e-c369-45fe-ac35-4f88ad73217b",
+            "data": {
+                "name": {
+                    "@type": "string",
+                    "@value": "geolite2-city"
+                },
+                "title": {
+                    "@type": "string",
+                    "@value": "GeoLite2-City"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "configuration": {
+                    "type": {
+                        "@type": "string",
+                        "@value": "guava_cache"
+                    },
+                    "max_size": {
+                        "@type": "integer",
+                        "@value": 1000
+                    },
+                    "expire_after_access": {
+                        "@type": "long",
+                        "@value": 60
+                    },
+                    "expire_after_access_unit": {
+                        "@type": "string",
+                        "@value": "SECONDS"
+                    },
+                    "expire_after_write": {
+                        "@type": "long",
+                        "@value": 0
+                    }
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "9742ec72-6a29-4558-a26e-e9deab01487a",
+            "data": {
+                "name": "NETFILTERUDPHEADER",
+                "pattern": "=UDP %{GREEDYDATA:message}"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "d26c08ea-3eb3-4cea-bd3e-0040ff213026",
+            "data": {
+                "name": "NETFILTERTCPHEADER",
+                "pattern": "=TCP %{GREEDYDATA:message}"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "lookup_adapter",
+                "version": "1"
+            },
+            "id": "8275fbb8-a128-496e-83db-a9a5b5ec0f36",
+            "data": {
+                "name": {
+                    "@type": "string",
+                    "@value": "geolite2-city"
+                },
+                "title": {
+                    "@type": "string",
+                    "@value": "GeoLite2-City"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "configuration": {
+                    "type": {
+                        "@type": "string",
+                        "@value": "maxmind_geoip"
+                    },
+                    "path": {
+                        "@type": "string",
+                        "@value": "/etc/graylog/server/GeoLite2-City.mmdb"
+                    },
+                    "database_type": {
+                        "@type": "string",
+                        "@value": "MAXMIND_CITY"
+                    },
+                    "check_interval": {
+                        "@type": "long",
+                        "@value": 0
+                    },
+                    "check_interval_unit": {
+                        "@type": "string",
+                        "@value": "MINUTES"
+                    }
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "pipeline",
+                "version": "1"
+            },
+            "id": "3ca1bcea-693f-49b6-9a61-46b2ba8bdb2d",
+            "data": {
+                "title": {
+                    "@type": "string",
+                    "@value": "router"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "source": {
+                    "@type": "string",
+                    "@value": "pipeline \"router\"\nstage -1 match either\nrule \"process netfilter logs\"\nstage 0 match either\nrule \"process TCP netfilter logs\"\nrule \"process UDP netfilter logs\"\nstage 1 match either\nrule \"Router src GeoIP Set\"\nrule \"Router dst GeoIP Set\"\nend"
+                },
+                "connected_streams": [{
+                    "@type": "string",
+                    "@value": "000000000000000000000001"
+                }]
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "pipeline_rule",
+                "version": "1"
+            },
+            "id": "ce171048-0908-4a3f-993e-eaf2c5105c45",
+            "data": {
+                "title": {
+                    "@type": "string",
+                    "@value": "process UDP netfilter logs"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "source": {
+                    "@type": "string",
+                    "@value": "rule \"process UDP netfilter logs\"\nwhen\n    contains(to_string($message.IP_HEADER_PROTO), \"UDP\")\nthen\n    let message_field = to_string($message.message); \n    let action = grok(pattern: \"%{NETFILTERUDPHEADER}\", value: message_field, only_named_captures: true);\n    let action1 = key_value(to_string(action));\n    set_fields(action1,\"UDP_HEADER_\");\n    let field_replace = regex_replace(\"}\", to_string($message.UDP_HEADER_LEN), \"\");\n    set_field(\"UDP_HEADER_LEN\", field_replace);\n    set_field(\"pipeline\", \"netfilter UDP header parse\");\nend"
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "pipeline_rule",
+                "version": "1"
+            },
+            "id": "60e960c1-9576-4c43-9572-027b382046dd",
+            "data": {
+                "title": {
+                    "@type": "string",
+                    "@value": "Router dst GeoIP Set"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "source": {
+                    "@type": "string",
+                    "@value": "rule \"Router dst GeoIP Set\"\nwhen\n    has_field(\"dst_ip\") &&  ! cidr_match(\"10.0.0.0/8\", to_ip($message.dst_ip)) ||\n    ! cidr_match(\"172.16.0.0/12\", to_ip($message.dst_ip)) ||\n    ! cidr_match(\"192.168.0.0/16\", to_ip($message.dst_ip))\nthen\n    let geo = lookup(\"GeoLite2-City\",to_string($message.dst_ip));\n    set_field(\"dst_ip_geolocation\", geo[\"coordinates\"]);\n    set_field(\"dst_ip_geo_country_code\", geo[\"country\"].iso_code);\n    set_field(\"dst_ip_geo_country_name\", geo[\"country\"].names.en);\n    set_field(\"dst_ip_geo_city_name\", geo[\"city\"].names.en);\nend"
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "lookup_table",
+                "version": "1"
+            },
+            "id": "a86ce604-1b2c-445c-8549-8a5765f54285",
+            "data": {
+                "default_single_value_type": {
+                    "@type": "string",
+                    "@value": "NULL"
+                },
+                "cache_name": {
+                    "@type": "string",
+                    "@value": "e8b5446e-c369-45fe-ac35-4f88ad73217b"
+                },
+                "name": {
+                    "@type": "string",
+                    "@value": "GeoLite2-City"
+                },
+                "default_multi_value_type": {
+                    "@type": "string",
+                    "@value": "NULL"
+                },
+                "default_multi_value": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "data_adapter_name": {
+                    "@type": "string",
+                    "@value": "8275fbb8-a128-496e-83db-a9a5b5ec0f36"
+                },
+                "title": {
+                    "@type": "string",
+                    "@value": "GeoLite2-City"
+                },
+                "default_single_value": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "pipeline_rule",
+                "version": "1"
+            },
+            "id": "8706f04b-b490-42c5-ad18-f7fad2efd1b1",
+            "data": {
+                "title": {
+                    "@type": "string",
+                    "@value": "Router src GeoIP Set"
+                },
+                "description": {
+                    "@type": "string",
+                    "@value": ""
+                },
+                "source": {
+                    "@type": "string",
+                    "@value": "rule \"Router src GeoIP Set\"\nwhen\n    has_field(\"src_ip\") &&  ! cidr_match(\"10.0.0.0/8\", to_ip($message.src_ip)) ||\n    ! cidr_match(\"172.16.0.0/12\", to_ip($message.src_ip)) ||\n    ! cidr_match(\"192.168.0.0/16\", to_ip($message.src_ip))\nthen\n    let geo = lookup(\"GeoLite2-City\",to_string($message.src_ip));\n    set_field(\"src_ip_geolocation\", geo[\"coordinates\"]);\n    set_field(\"src_ip_geo_country_code\", geo[\"country\"].iso_code);\n    set_field(\"src_ip_geo_country_name\", geo[\"country\"].names.en);\n    set_field(\"src_ip_geo_city_name\", geo[\"city\"].names.en);\nend"
+                }
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "dcc0df6b-054f-4e02-b2a0-d1b84ca5d2a9",
+            "data": {
+                "name": "WORD",
+                "pattern": "\\b\\w+\\b"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "c307eec3-a601-4cd9-aee5-66b824ef4f62",
+            "data": {
+                "name": "IP",
+                "pattern": "(?:%{IPV6}|%{IPV4})"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "3bffc9ba-68af-4f4a-9d14-be5df60beeee",
+            "data": {
+                "name": "ETHTYPE",
+                "pattern": "(?:(?:[A-Fa-f0-9]{2}):(?:[A-Fa-f0-9]{2}))"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "722160e0-2a2b-44bd-a7cd-4bbccf94a879",
+            "data": {
+                "name": "MAC",
+                "pattern": "(?:%{CISCOMAC}|%{WINDOWSMAC}|%{COMMONMAC})"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "47ef3861-94f5-4873-b1fb-c4bea6e18275",
+            "data": {
+                "name": "GREEDYDATA",
+                "pattern": ".*"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "a41de9f0-e4ee-4380-ba4a-de4ceb24c57e",
+            "data": {
+                "name": "INT",
+                "pattern": "(?:[+-]?(?:[0-9]+))"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "f6c33bd1-d388-4d40-8f93-ff5c4a3985ad",
+            "data": {
+                "name": "IPV6",
+                "pattern": "((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}))|:)))(%.+)?"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "a9a5615e-372e-4ee9-be02-9753c2e67ba1",
+            "data": {
+                "name": "IPV4",
+                "pattern": "(?<![0-9])(?:(?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5]))(?![0-9])"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "34e78bb4-1815-41f3-85fe-7cc83d7d0a91",
+            "data": {
+                "name": "WINDOWSMAC",
+                "pattern": "(?:(?:[A-Fa-f0-9]{2}-){5}[A-Fa-f0-9]{2})"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "8f4afc24-7be5-42b7-b6fd-e8d1bea3eb3d",
+            "data": {
+                "name": "CISCOMAC",
+                "pattern": "(?:(?:[A-Fa-f0-9]{4}\\.){2}[A-Fa-f0-9]{4})"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        },
+        {
+            "v": "1",
+            "type": {
+                "name": "grok_pattern",
+                "version": "1"
+            },
+            "id": "967c9f73-0053-4fab-b5b6-2f9dde2f1727",
+            "data": {
+                "name": "COMMONMAC",
+                "pattern": "(?:(?:[A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2})"
+            },
+            "constraints": [{
+                "type": "server-version",
+                "version": ">=3.3.0+4ea5649"
+            }]
+        }
+    ]
+}
