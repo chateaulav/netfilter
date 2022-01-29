@@ -100,7 +100,7 @@
                 },
                 "source": {
                     "@type": "string",
-                    "@value": "rule \"process TCP netfilter logs\"\nwhen\n    contains(to_string($message.IP_HEADER_PROTO), \"TCP\")\nthen\n    let message_field = to_string($message.message); \n    let action = grok(pattern: \"%{NETFILTERTCPHEADER}\", value: message_field, only_named_captures: true);\n    let action1 = key_value(to_string(action));\n    set_fields(action1,\"TCP_HEADER_\");\n    let field_replace = regex_replace(\"}\", to_string($message.TCP_HEADER_URGP), \"\");\n    set_field(\"TCP_HEADER_URGP\", field_replace);\n    set_field(\"pipeline\", \"netfilter TCP header parse\");\nend"
+                    "@value": "rule \"process TCP netfilter logs\"\nwhen\n    contains(to_string($message.IP_HEADER_PROTO), \"TCP\")\nthen\n    let message_field = to_string($message.message); \n    let action = grok(pattern: \"%{NETFILTERTCPHEADER}\", value: message_field, only_named_captures: true);\n    let action1 = key_value(to_string(action.message));\n    set_fields(action1,\"TCP_HEADER_\");\n    set_field(\"pipeline\", \"netfilter TCP header parse\");\nend"
                 }
             },
             "constraints": [{
@@ -284,7 +284,7 @@
                 },
                 "source": {
                     "@type": "string",
-                    "@value": "rule \"process UDP netfilter logs\"\nwhen\n    contains(to_string($message.IP_HEADER_PROTO), \"UDP\")\nthen\n    let message_field = to_string($message.message); \n    let action = grok(pattern: \"%{NETFILTERUDPHEADER}\", value: message_field, only_named_captures: true);\n    let action1 = key_value(to_string(action));\n    set_fields(action1,\"UDP_HEADER_\");\n    let field_replace = regex_replace(\"}\", to_string($message.UDP_HEADER_LEN), \"\");\n    set_field(\"UDP_HEADER_LEN\", field_replace);\n    set_field(\"pipeline\", \"netfilter UDP header parse\");\nend"
+                    "@value": "rule \"process UDP netfilter logs\"\nwhen\n    contains(to_string($message.IP_HEADER_PROTO), \"UDP\")\nthen\n    let message_field = to_string($message.message); \n    let action = grok(pattern: \"%{NETFILTERUDPHEADER}\", value: message_field, only_named_captures: true);\n    let action1 = key_value(to_string(action.message));\n    set_fields(action1,\"UDP_HEADER_\");\n    set_field(\"pipeline\", \"netfilter UDP header parse\");\nend"
                 }
             },
             "constraints": [{
